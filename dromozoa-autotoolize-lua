@@ -1,1 +1,29 @@
-#! /bin/sh -e
+#! /usr/bin/env lua
+
+local LUA_VERSION_MAJOR
+local LUA_VERSION_MINOR
+local LUA_VERSION_RELEASE
+
+local version = {}
+
+for line in io.lines("src/lua.h") do
+  local major, minor, release = line:match([[#define%s+LUA_RELEASE%s+"Lua%s+(%d+)%.(%d+)%.(%d+)"]])
+  if major then
+    version.major = tonumber(major)
+    version.minor = tonumber(minor)
+    version.release = tonumber(release)
+    break
+  end
+  local key, value = line:match([[#define%s+LUA_VERSION_(%u+)%s+"(%d+)"]])
+  if key then
+    version[key:lower()] = tonumber(value)
+    if key == "RELEASE" then
+      break
+    end
+  end
+end
+
+print(version.major, version.minor, version.release)
+
+
+
