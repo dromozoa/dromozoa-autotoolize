@@ -1,29 +1,102 @@
 #! /usr/bin/env lua
 
-local LUA_VERSION_MAJOR
-local LUA_VERSION_MINOR
-local LUA_VERSION_RELEASE
-
 local version = {}
+local make_vars = {}
 
-for line in io.lines("src/lua.h") do
-  local major, minor, release = line:match([[#define%s+LUA_RELEASE%s+"Lua%s+(%d+)%.(%d+)%.(%d+)"]])
-  if major then
-    version.major = tonumber(major)
-    version.minor = tonumber(minor)
-    version.release = tonumber(release)
-    break
-  end
-  local key, value = line:match([[#define%s+LUA_VERSION_(%u+)%s+"(%d+)"]])
-  if key then
-    version[key:lower()] = tonumber(value)
-    if key == "RELEASE" then
+local function check_header(filename)
+  io.stderr:write("checking ", filename, "\n")
+  local result = {}
+  for line in io.lines("src/lua.h") do
+    local major, minor, release = line:match([[#define%s+LUA_RELEASE%s+"Lua%s+(%d+)%.(%d+)%.(%d+)"]])
+    if major then
+      result.major = tonumber(major)
+      result.minor = tonumber(minor)
+      result.release = tonumber(release)
       break
     end
+    local key, value = line:match([[#define%s+LUA_VERSION_(%u+)%s+"(%d+)"]])
+    if key then
+      result[key:lower()] = tonumber(value)
+      if key == "RELEASE" then
+        break
+      end
+    end
   end
+  return result
 end
 
-print(version.major, version.minor, version.release)
+local function check_makefile(filename)
+  io.stderr:write("checking ", filename, "\n")
+  local result = {}
+  local buffer = ""
+  for line in io.lines("src/Makefile") do
+    if line:find("\\$") then
+      buffer = buffer .. line:sub(1, -2)
+    else
+      buffer = buffer .. line
+      local key, value = buffer:match("^([%w_]+)%s*=%s*(.*)")
+      if key then
+        result[key] = value
+      end
+      buffer = ""
+    end
+  end
+  return result
+end
 
+local function eval(command)
+  local handle = assert(io.popen(command))
+  local result = handle:read("*a"):gsub("%s+$", "")
+  handle:close()
+  return result
+end
 
+local version = check_header("src/lua.h")
+local make_vars = check_makefile("src/Makefile")
+
+print(make_vars.CORE_O)
+print(make_vars.LUA_O)
+print(make_vars.LUAC_O)
+
+print(eval("echo src/*.h"))
+
+local state = 1
+local out = assert(io.open("src/luaconf.h.in", "w"))
+for line in io.lines("src/luaconf.h") do
+  if state == 1 then
+    if line:find([[Search for "@@" to find all configurable definitions%.]]) then
+      state = 2
+    end
+  elseif state == 2 then
+    if line == "" then
+      state = 3
+    end
+  elseif state == 3 then
+    if line == "" then
+      if version.major == 5 then
+        if version.minor <= 2 then
+          out:write([[
+#define LUA_COMPAT_ALL
+#define LUA_USE_POSIX
+#define LUA_USE_DLOPEN
+@LUA_USE_READLINE@
+#define LUA_USE_STRTODHEX
+#define LUA_USE_AFORMAT
+#define LUA_USE_LONGLONG
+]])
+        else
+          out:write([[
+#define LUA_USE_POSIX
+#define LUA_USE_DLOPEN
+@LUA_USE_READLINE@
+]])
+        end
+      end
+      state = 4
+    end
+  else
+    line = line:gsub([[(#define%s+LUA_ROOT%s+)"[^"]+/"]], [[%1"@prefix@/"]])
+  end
+  out:write(line, "\n")
+end
 
