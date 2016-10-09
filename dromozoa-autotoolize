@@ -3,10 +3,12 @@
 local version = {}
 local make_vars = {}
 
-local function check_header(filename)
+local function check_header(filename, result)
   io.stderr:write("checking ", filename, "\n")
-  local result = {}
-  for line in io.lines("src/lua.h") do
+  if not result then
+    result = {}
+  end
+  for line in io.lines(filename) do
     local major, minor, release = line:match([[#define%s+LUA_RELEASE%s+"Lua%s+(%d+)%.(%d+)%.(%d+)"]])
     if major then
       result.major = tonumber(major)
@@ -25,11 +27,13 @@ local function check_header(filename)
   return result
 end
 
-local function check_makefile(filename)
+local function check_makefile(filename, result)
   io.stderr:write("checking ", filename, "\n")
-  local result = {}
+  if not result then
+    result = {}
+  end
   local buffer = ""
-  for line in io.lines("src/Makefile") do
+  for line in io.lines(filename) do
     if line:find("\\$") then
       buffer = buffer .. line:sub(1, -2)
     else
@@ -44,38 +48,18 @@ local function check_makefile(filename)
   return result
 end
 
-local function eval(command)
-  local handle = assert(io.popen(command))
-  local result = handle:read("*a"):gsub("%s+$", "")
-  handle:close()
-  return result
-end
-
-local version = check_header("src/lua.h")
-local make_vars = check_makefile("src/Makefile")
-
-print(make_vars.CORE_O)
-print(make_vars.LUA_O)
-print(make_vars.LUAC_O)
-
-print(eval("echo src/*.h"))
-
-local state = 1
-local out = assert(io.open("src/luaconf.h.in", "w"))
-for line in io.lines("src/luaconf.h") do
-  if state == 1 then
-    if line:find([[Search for "@@" to find all configurable definitions%.]]) then
-      state = 2
-    end
-  elseif state == 2 then
-    if line == "" then
-      state = 3
-    end
-  elseif state == 3 then
-    if line == "" then
-      if version.major == 5 then
-        if version.minor <= 2 then
-          out:write([[
+local generate_header_templates = {
+-- Lua 5.1
+[[
+#define LUA_USE_POSIX
+#define LUA_USE_DLOPEN
+@LUA_USE_READLINE@
+#define LUA_USE_STRTODHEX
+#define LUA_USE_AFORMAT
+#define LUA_USE_LONGLONG
+]];
+-- Lua 5.2
+[[
 #define LUA_COMPAT_ALL
 #define LUA_USE_POSIX
 #define LUA_USE_DLOPEN
@@ -83,20 +67,131 @@ for line in io.lines("src/luaconf.h") do
 #define LUA_USE_STRTODHEX
 #define LUA_USE_AFORMAT
 #define LUA_USE_LONGLONG
-]])
-        else
-          out:write([[
+]];
+-- Lua 5.3
+[[
 #define LUA_USE_POSIX
 #define LUA_USE_DLOPEN
 @LUA_USE_READLINE@
-]])
-        end
+]];
+}
+
+local function generate_header(out, filename, version_major, version_minor)
+  local state = 1
+  for line in io.lines("src/luaconf.h") do
+    if state == 1 then
+      if line:find([[Search for "@@" to find all configurable definitions%.]]) then
+        state = 2
       end
-      state = 4
+    elseif state == 2 then
+      if line == "" then
+        state = 3
+      end
+    elseif state == 3 then
+      if line == "" then
+        assert(version_major == 5)
+        out:write(assert(generate_header_templates[version_minor]))
+        state = 4
+      end
+    else
+      line = line:gsub([[(#define%s+LUA_ROOT%s+)"[^"]+/"]], [[%1"@prefix@/"]])
     end
-  else
-    line = line:gsub([[(#define%s+LUA_ROOT%s+)"[^"]+/"]], [[%1"@prefix@/"]])
+    out:write(line, "\n")
   end
-  out:write(line, "\n")
+  return out
 end
 
+local function apply_template(out, template, vars)
+  out:write((template:gsub("%[%%%s*(.-)%s*%%%]", vars)))
+  return out
+end
+
+local function eval(command)
+  local handle = assert(io.popen(command))
+  local result = handle:read("*a"):gsub("%s+$", "")
+  handle:close()
+  return result
+end
+
+local function exec(command)
+  local result = os.execute(command)
+  if type(result) == "number" then
+    return result == 0
+  else
+    return result
+  end
+end
+
+local function split_whitespace(s, result)
+  if not result then
+    result = {}
+  end
+  for item in s:gmatch("%S+") do
+    result[#result + 1] = item
+  end
+  return result
+end
+
+local function apply_gsub(list, pattern, repl)
+  for i, v in ipairs(list) do
+    list[i] = v:gsub(pattern, repl)
+  end
+  return list
+end
+
+local function normalize_whitespace(source)
+  return (source:gsub("^%s+", ""):gsub("%s+$", ""):gsub("%s+", " "))
+end
+
+local version = check_header("src/lua.h")
+local make_vars = {}
+check_makefile("Makefile", make_vars)
+check_makefile("src/Makefile", make_vars)
+
+local vars = {}
+
+-- print(make_vars.TO_BIN)
+-- print(make_vars.CORE_O)
+print(make_vars.LUA_O)
+print(make_vars.LUAC_O)
+
+-- print(eval("echo src/*.h"))
+
+local out = assert(io.open("src/luaconf.h.in", "w"))
+generate_header(out, "src/luaconf.h", version.major, version.minor)
+out:close()
+
+local vars = {
+  LUA_V = ("%d.%d"):format(version.major, version.minor);
+  LUA_R = ("%d.%d.%d"):format(version.major, version.minor, version.release);
+}
+
+local objects = {}
+split_whitespace(make_vars.LUA_O, objects)
+split_whitespace(make_vars.LIB_O, objects)
+apply_gsub(objects, "%.o$", ".c")
+
+vars.liblua_la_SOURCES = table.concat(objects, " ")
+
+local out = assert(io.open("src/Makefile.am", "w"))
+apply_template(out, [[
+lib_LTLIBRARIES = liblua.la
+bin_PROGRAMS = lua luac
+
+liblua_la_SOURCES = [% liblua_la_SOURCES %]
+liblua_la_LDFLAGS = -release @LUA_R@
+liblua_la_LIBADD = @LIBM@
+
+lua_SOURCES = [% lua_SOURCES %]
+lua_LDFLAGS = -export-dynamic -static
+lua_LDADD = liblua.la
+
+luac_SOURCES = [% luac_SOURCES %]
+luac_LDFLAGS = -export-dynamic -static
+luac_LDADD = liblua.la
+]], vars)
+
+-- io.stderr:write("fething m4/ax_lib_readline.m4\n")
+-- assert(exec("mkdir -p m4"))
+-- assert(exec("curl -fLs 'http://git.savannah.gnu.org/gitweb/?p=autoconf-archive.git;a=blob_plain;f=m4/ax_lib_readline.m4' >m4/ax_lib_readline.m4.new"))
+-- assert(os.rename("m4/ax_lib_readline.m4.new", "m4/ax_lib_readline.m4"))
