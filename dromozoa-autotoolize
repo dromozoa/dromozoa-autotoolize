@@ -139,23 +139,12 @@ local function apply_gsub(list, pattern, repl)
   return list
 end
 
-local function normalize_whitespace(source)
-  return (source:gsub("^%s+", ""):gsub("%s+$", ""):gsub("%s+", " "))
-end
-
 local version = check_header("src/lua.h")
 local make_vars = {}
 check_makefile("Makefile", make_vars)
 check_makefile("src/Makefile", make_vars)
 
 local vars = {}
-
--- print(make_vars.TO_BIN)
--- print(make_vars.CORE_O)
-print(make_vars.LUA_O)
-print(make_vars.LUAC_O)
-
--- print(eval("echo src/*.h"))
 
 local out = assert(io.open("src/luaconf.h.in", "w"))
 generate_header(out, "src/luaconf.h", version.major, version.minor)
@@ -166,12 +155,21 @@ local vars = {
   LUA_R = ("%d.%d.%d"):format(version.major, version.minor, version.release);
 }
 
-local objects = {}
-split_whitespace(make_vars.LUA_O, objects)
-split_whitespace(make_vars.LIB_O, objects)
-apply_gsub(objects, "%.o$", ".c")
+local files = {}
+split_whitespace(make_vars.CORE_O, files)
+split_whitespace(make_vars.LIB_O, files)
+apply_gsub(files, "%.o$", ".c")
+vars.liblua_la_SOURCES = table.concat(files, " ")
 
-vars.liblua_la_SOURCES = table.concat(objects, " ")
+local files = {}
+split_whitespace(make_vars.LUA_O, files)
+apply_gsub(files, "%.o$", ".c")
+vars.lua_SOURCES = table.concat(files, " ")
+
+local files = {}
+split_whitespace(make_vars.LUAC_O, files)
+apply_gsub(files, "%.o$", ".c")
+vars.luac_SOURCES = table.concat(files, " ")
 
 local out = assert(io.open("src/Makefile.am", "w"))
 apply_template(out, [[
