@@ -156,6 +156,10 @@ local vars = {
 }
 
 local files = {}
+split_whitespace(make_vars.TO_MAN, files)
+vars.man_MANS = table.concat(files, " ")
+
+local files = {}
 split_whitespace(make_vars.CORE_O, files)
 split_whitespace(make_vars.LIB_O, files)
 apply_gsub(files, "%.o$", ".c")
@@ -170,6 +174,13 @@ local files = {}
 split_whitespace(make_vars.LUAC_O, files)
 apply_gsub(files, "%.o$", ".c")
 vars.luac_SOURCES = table.concat(files, " ")
+
+local out = assert(io.open("doc/Makefile.am", "w"))
+apply_template(out, [[
+man_MANS = [% man_MANS %]
+html_DATA = [% html_DATA %]
+]], vars)
+out:close()
 
 local out = assert(io.open("src/Makefile.am", "w"))
 apply_template(out, [[
@@ -188,6 +199,7 @@ luac_SOURCES = [% luac_SOURCES %]
 luac_LDFLAGS = -export-dynamic -static
 luac_LDADD = liblua.la
 ]], vars)
+out:close()
 
 -- io.stderr:write("fething m4/ax_lib_readline.m4\n")
 -- assert(exec("mkdir -p m4"))
