@@ -21,6 +21,13 @@ local DROMOZOA_AUTOTOOLIZE_VERSION = "0.0"
 local DROMOZOA_AUTOTOOLIZE_EMAIL = "moyu@dromozoa.com"
 local DROMOZOA_AUTOTOOLIZE_URL = "https://github.com/dromozoa/dromozoa-autotoolize/"
 
+local function eval(command)
+  local handle = assert(io.popen(command))
+  local result = handle:read("*a")
+  handle:close()
+  return (result:gsub("%s+$", ""))
+end
+
 local function exec(command)
   local result = os.execute(command)
   if type(result) == "number" then
@@ -167,6 +174,9 @@ split_whitespace(make_vars.TO_MAN, files)
 vars.man_MANS = table.concat(files, " ")
 
 local files = {}
+split_whitespace(eval("cd src && echo *.h"), files)
+
+local files = {}
 split_whitespace(make_vars.CORE_O, files)
 split_whitespace(make_vars.LIB_O, files)
 map_gsub(files, "%.o$", ".c")
@@ -217,7 +227,7 @@ luac_LDADD = liblua.la
 ]], vars)
 
 process_template("configure.ac", [=[
-AC_INIT([lua], [[% LUA_R %].[% DROMOZOA_AUTOTOOLIZE_VERSION %]], [[% DROMOZOA_AUTOTOOLIZE_URL %]], [], [[% DROMOZOA_AUTOTOOLIZE_URL %]])
+AC_INIT([lua], [[% LUA_R %].dromozoa-[% DROMOZOA_AUTOTOOLIZE_VERSION %]], [[% DROMOZOA_AUTOTOOLIZE_URL %]], [], [[% DROMOZOA_AUTOTOOLIZE_URL %]])
 AM_INIT_AUTOMAKE
 LT_INIT
 
@@ -254,6 +264,10 @@ See doc/readme.html.
 ]], vars)
 
 process_template("ChangeLog", [[
+See doc/readme.html.
+]], vars)
+
+process_template("COPYING", [[
 See doc/readme.html.
 ]], vars)
 
