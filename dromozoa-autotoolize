@@ -1,11 +1,25 @@
 #! /usr/bin/env lua
 
-local function eval(command)
-  local handle = assert(io.popen(command))
-  local result = handle:read("*a")
-  handle:close()
-  return (result:gsub("%s+$", ""))
-end
+-- Copyright (C) 2016 Tomoyuki Fujimori <moyu@dromozoa.com>
+--
+-- This file is part of dromozoa-autotoolize.
+--
+-- dromozoa-autotoolize is free software: you can redistribute it and/or modify
+-- it under the terms of the GNU General Public License as published by
+-- the Free Software Foundation, either version 3 of the License, or
+-- (at your option) any later version.
+--
+-- dromozoa-autotoolize is distributed in the hope that it will be useful,
+-- but WITHOUT ANY WARRANTY; without even the implied warranty of
+-- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-- GNU General Public License for more details.
+--
+-- You should have received a copy of the GNU General Public License
+-- along with dromozoa-autotoolize.  If not, see <http://www.gnu.org/licenses/>.
+
+local DROMOZOA_AUTOTOOLIZE_VERSION = "0.0"
+local DROMOZOA_AUTOTOOLIZE_EMAIL = "moyu@dromozoa.com"
+local DROMOZOA_AUTOTOOLIZE_URL = "https://github.com/dromozoa/dromozoa-autotoolize/"
 
 local function exec(command)
   local result = os.execute(command)
@@ -140,12 +154,10 @@ local make_vars = {}
 check_makefile("Makefile", make_vars)
 check_makefile("src/Makefile", make_vars)
 
-local vars = {}
-
-process_luaconf_header(version)
-
 local vars = {
-  DROMOZOA_TAG = "da1";
+  DROMOZOA_AUTOTOOLIZE_VERSION = DROMOZOA_AUTOTOOLIZE_VERSION;
+  DROMOZOA_AUTOTOOLIZE_EMAIL = DROMOZOA_AUTOTOOLIZE_EMAIL;
+  DROMOZOA_AUTOTOOLIZE_URL = DROMOZOA_AUTOTOOLIZE_URL;
   LUA_V = ("%d.%d"):format(version.major, version.minor);
   LUA_R = ("%d.%d.%d"):format(version.major, version.minor, version.release);
 }
@@ -170,6 +182,8 @@ split_whitespace(make_vars.LUAC_O, files)
 map_gsub(files, "%.o$", ".c")
 vars.luac_SOURCES = table.concat(files, " ")
 
+process_luaconf_header(version)
+
 process_template("Makefile.am", [[
 ACLOCAL_AMFLAGS = -I m4
 SUBDIRS = doc src
@@ -180,8 +194,9 @@ install-data-hook:
 ]], vars)
 
 process_template("doc/Makefile.am", [[
+EXTRA_DIST = $(srcdir)/*
 man_MANS = [% man_MANS %]
-html_DATA = *.css *.gif *.html *.png
+html_DATA = $(srcdir)/*.css $(srcdir)/*.gif $(srcdir)/*.html $(srcdir)/*.png
 ]], vars)
 
 process_template("src/Makefile.am", [[
@@ -202,7 +217,7 @@ luac_LDADD = liblua.la
 ]], vars)
 
 process_template("configure.ac", [=[
-AC_INIT([lua], [[% LUA_R %].[% DROMOZOA_TAG %]], [moyu@dromozoa.com], [], [https://github.com/dromozoa/dromozoa-autotoolize/])
+AC_INIT([lua], [[% LUA_R %].[% DROMOZOA_AUTOTOOLIZE_VERSION %]], [[% DROMOZOA_AUTOTOOLIZE_URL %]], [], [[% DROMOZOA_AUTOTOOLIZE_URL %]])
 AM_INIT_AUTOMAKE
 LT_INIT
 
