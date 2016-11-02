@@ -169,6 +169,15 @@ local vars = {
   LUA_R = ("%d.%d.%d"):format(version.major, version.minor, version.release);
 }
 
+local files = split_whitespace(eval("cd doc && echo [a-z]*"))
+vars.EXTRA_DIST = table.concat(files, " ")
+
+local files = split_whitespace(make_vars.TO_MAN)
+vars.man_MANS = table.concat(files, " ")
+
+local files = split_whitespace(eval("cd doc && echo *.css *.gif *.html *.png"))
+vars.html_DATA = table.concat(files, " ")
+
 local map = {}
 
 local files = split_whitespace(make_vars.TO_INC)
@@ -189,9 +198,6 @@ for _, file in ipairs(files) do
   end
 end
 vars.noinst_HEADERS = table.concat(noinst_headers, " ")
-
-local files = split_whitespace(make_vars.TO_MAN)
-vars.man_MANS = table.concat(files, " ")
 
 local files = {}
 split_whitespace(make_vars.CORE_O, files)
@@ -219,9 +225,9 @@ install-data-hook:
 ]], vars)
 
 process_template("doc/Makefile.am", [[
-EXTRA_DIST = $(srcdir)/*
+EXTRA_DIST = [% EXTRA_DIST %]
 man_MANS = [% man_MANS %]
-html_DATA = $(srcdir)/*.css $(srcdir)/*.gif $(srcdir)/*.html $(srcdir)/*.png
+html_DATA = [% html_DATA %]
 ]], vars)
 
 process_template("src/Makefile.am", [[
@@ -252,7 +258,7 @@ LT_INIT
 
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_HEADER([src/config.h])
-AC_CONFIG_FILES([Makefile doc/Makefile src/Makefile src/luaconf.h])
+AC_CONFIG_FILES([src/luaconf.h Makefile doc/Makefile src/Makefile])
 
 AC_PROG_CC
 AC_PROG_MKDIR_P
@@ -278,7 +284,7 @@ process_template("AUTHORS", [[
 See doc/readme.html.
 ]], vars)
 
-process_template("NEWS", [[
+process_template("COPYING", [[
 See doc/readme.html.
 ]], vars)
 
@@ -286,7 +292,7 @@ process_template("ChangeLog", [[
 See doc/readme.html.
 ]], vars)
 
-process_template("COPYING", [[
+process_template("NEWS", [[
 See doc/readme.html.
 ]], vars)
 
