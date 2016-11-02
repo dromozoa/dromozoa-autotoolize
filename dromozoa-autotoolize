@@ -169,12 +169,29 @@ local vars = {
   LUA_R = ("%d.%d.%d"):format(version.major, version.minor, version.release);
 }
 
-local files = {}
-split_whitespace(make_vars.TO_MAN, files)
-vars.man_MANS = table.concat(files, " ")
+local map = {}
 
-local files = {}
-split_whitespace(eval("cd src && echo *.h"), files)
+local files = split_whitespace(make_vars.TO_INC)
+local include_headers = {}
+for _, file in ipairs(files) do
+  map[file] = true
+  if file ~= "luaconf.h" then
+    include_headers[#include_headers + 1] = file
+  end
+end
+vars.include_HEADERS = table.concat(include_headers, " ")
+
+local files = split_whitespace(eval("cd src && echo *.h"))
+local noinst_headers = {}
+for _, file in ipairs(files) do
+  if not map[file] then
+    noinst_headers[#noinst_headers + 1] = file
+  end
+end
+vars.noinst_HEADERS = table.concat(noinst_headers, " ")
+
+local files = split_whitespace(make_vars.TO_MAN)
+vars.man_MANS = table.concat(files, " ")
 
 local files = {}
 split_whitespace(make_vars.CORE_O, files)
@@ -182,13 +199,11 @@ split_whitespace(make_vars.LIB_O, files)
 map_gsub(files, "%.o$", ".c")
 vars.liblua_la_SOURCES = table.concat(files, " ")
 
-local files = {}
-split_whitespace(make_vars.LUA_O, files)
+local files = split_whitespace(make_vars.LUA_O)
 map_gsub(files, "%.o$", ".c")
 vars.lua_SOURCES = table.concat(files, " ")
 
-local files = {}
-split_whitespace(make_vars.LUAC_O, files)
+local files = split_whitespace(make_vars.LUAC_O)
 map_gsub(files, "%.o$", ".c")
 vars.luac_SOURCES = table.concat(files, " ")
 
@@ -212,6 +227,10 @@ html_DATA = $(srcdir)/*.css $(srcdir)/*.gif $(srcdir)/*.html $(srcdir)/*.png
 process_template("src/Makefile.am", [[
 lib_LTLIBRARIES = liblua.la
 bin_PROGRAMS = lua luac
+
+include_HEADERS = [% include_HEADERS %]
+nodist_include_HEADERS = luaconf.h
+noinst_HEADERS = [% noinst_HEADERS %]
 
 liblua_la_SOURCES = [% liblua_la_SOURCES %]
 liblua_la_LDFLAGS = -release @LUA_R@
