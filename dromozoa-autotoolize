@@ -21,6 +21,16 @@ local DROMOZOA_AUTOTOOLIZE_VERSION = "0.0"
 local DROMOZOA_AUTOTOOLIZE_EMAIL = "moyu@dromozoa.com"
 local DROMOZOA_AUTOTOOLIZE_URL = "https://github.com/dromozoa/dromozoa-autotoolize/"
 
+local Q = [[']]
+local E = [[\']]
+local QEQ = Q .. E .. Q
+local EQQ = E .. Q .. Q
+local QQE = Q .. Q .. E
+
+local function quote(value)
+  return ((Q .. value:gsub(Q, QEQ) .. Q):gsub(EQQ, E):gsub(QQE, E))
+end
+
 local function eval(command)
   local handle = assert(io.popen(command))
   local result = handle:read("*a")
@@ -35,6 +45,14 @@ local function exec(command)
   else
     return result
   end
+end
+
+local function is_regular_file(file)
+  return exec("test -f " .. quote(file))
+end
+
+local function is_directory(file)
+  return exec("test -d " .. quote(file))
 end
 
 local function split_whitespace(s, result)
