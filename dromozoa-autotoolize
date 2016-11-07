@@ -21,14 +21,14 @@ local DROMOZOA_AUTOTOOLIZE_VERSION = "0.0"
 local DROMOZOA_AUTOTOOLIZE_EMAIL = "moyu@dromozoa.com"
 local DROMOZOA_AUTOTOOLIZE_URL = "https://github.com/dromozoa/dromozoa-autotoolize/"
 
-local Q = [[']]
-local E = [[\']]
-local QEQ = Q .. E .. Q
-local EQQ = E .. Q .. Q
-local QQE = Q .. Q .. E
+local q = [[']]
+local e = [[\']]
+local qeq = q .. e .. q
+local eqq = e .. q .. q
+local qqe = q .. q .. e
 
 local function quote(value)
-  return ((Q .. value:gsub(Q, QEQ) .. Q):gsub(EQQ, E):gsub(QQE, E))
+  return ((q .. tostring(value):gsub(q, qeq) .. q):gsub(eqq, e):gsub(qqe, e))
 end
 
 local function eval(command)
