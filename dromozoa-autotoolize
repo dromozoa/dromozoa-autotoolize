@@ -35,13 +35,17 @@ local function eval(command)
   local handle = assert(io.popen(command))
   local result = handle:read("*a")
   handle:close()
-  return (result:gsub("%s+$", ""))
+  return (result:gsub("\n+$", ""))
 end
 
 local function exec(command)
   local result = os.execute(command)
   if type(result) == "number" then
-    return result == 0
+    if result == 0 then
+      return true
+    else
+      return nil
+    end
   else
     return result
   end
