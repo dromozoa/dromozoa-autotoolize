@@ -5,8 +5,6 @@ here=`pwd`
 root=`dirname "$0"`
 root=`(cd "$root" && pwd)`
 
-version=`"$root/dromozoa-autotoolize" version`
-
 for i in "$@"
 do
   cd "$here"
@@ -25,13 +23,4 @@ do
   cd tmp
   ../configure
   make dist
-
-  cd "$here"
-  case x$name in
-    xlua-5.1) dist=lua-5.1.0.dromozoa-autotoolize-$version;;
-    *) dist=$name.dromozoa-autotoolize-$version;;
-  esac
-
-  gzip -cd "$name/tmp/$dist.tar.gz" | tar xf -
-  diff -qr "$name" "$dist" | tee "$dist.diff"
 done
