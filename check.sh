@@ -21,4 +21,12 @@ do
   rm -fr "$dist"
   gzip -cd "$name-build/$dist.tar.gz" | tar xf -
   diff -r -x Makefile -x autom4te.cache -x luaconf.h "$name" "$dist"
+
+  cd "$dist"
+  ./configure
+  make
+  make check
+
+  ./src/lua -v
+  ./src/luac -v
 done
