@@ -337,21 +337,12 @@ AC_SUBST([LUA_USE_READLINE])
 AC_OUTPUT
 ]=], vars)
 
-process_template("AUTHORS", [[
+local files = { "AUTHORS", "COPYING", "ChangeLog", "NEWS" }
+for _, file in ipairs(files) do
+  process_template(file, [[
 See doc/readme.html.
 ]], vars)
-
-process_template("COPYING", [[
-See doc/readme.html.
-]], vars)
-
-process_template("ChangeLog", [[
-See doc/readme.html.
-]], vars)
-
-process_template("NEWS", [[
-See doc/readme.html.
-]], vars)
+end
 
 io.stderr:write("fething m4/ax_lib_readline.m4\n")
 assert(exec("mkdir -p m4"))
