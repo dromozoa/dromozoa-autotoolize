@@ -7,20 +7,20 @@ root=`(cd "$root" && pwd)`
 
 for i in "$@"
 do
-  cd "$here"
-
   name=`basename "$i"`
   name=`expr "x$name" : 'x\(.*\)\.tar\.gz$' || :`
 
-  echo "processing $i"
+  cd "$here"
   gzip -cd "$i" | tar xf -
 
   cd "$name"
   "$root/dromozoa-autotoolize"
   autoreconf -i
 
-  mkdir -p tmp
-  cd tmp
-  ../configure
+  cd "$here"
+  mkdir -p "$name-build"
+
+  cd "$name-build"
+  "../$name/configure"
   make dist
 done
