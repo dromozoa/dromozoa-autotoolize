@@ -196,6 +196,13 @@ local function process_template(filename, template, vars)
   out:close()
 end
 
+local command = ...
+
+if command == "version" then
+  io.write(DROMOZOA_AUTOTOOLIZE_VERSION, "\n")
+  return
+end
+
 local version = check_lua_header()
 local make_vars = {}
 check_makefile("Makefile", make_vars)
