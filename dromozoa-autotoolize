@@ -1,0 +1,350 @@
+#! /usr/bin/env lua
+
+-- Copyright (C) 2016 Tomoyuki Fujimori <moyu@dromozoa.com>
+--
+-- This file is part of dromozoa-autotoolize.
+--
+-- dromozoa-autotoolize is free software: you can redistribute it and/or modify
+-- it under the terms of the GNU General Public License as published by
+-- the Free Software Foundation, either version 3 of the License, or
+-- (at your option) any later version.
+--
+-- dromozoa-autotoolize is distributed in the hope that it will be useful,
+-- but WITHOUT ANY WARRANTY; without even the implied warranty of
+-- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-- GNU General Public License for more details.
+--
+-- You should have received a copy of the GNU General Public License
+-- along with dromozoa-autotoolize.  If not, see <http://www.gnu.org/licenses/>.
+
+local DROMOZOA_AUTOTOOLIZE_VERSION = "1.0"
+local DROMOZOA_AUTOTOOLIZE_EMAIL = "moyu@dromozoa.com"
+local DROMOZOA_AUTOTOOLIZE_URL = "https://github.com/dromozoa/dromozoa-autotoolize/"
+
+local q = [[']]
+local e = [[\']]
+local qeq = q .. e .. q
+local eqq = e .. q .. q
+local qqe = q .. q .. e
+
+local function quote(value)
+  return ((q .. tostring(value):gsub(q, qeq) .. q):gsub(eqq, e):gsub(qqe, e))
+end
+
+local function eval(command)
+  local handle = assert(io.popen(command))
+  local result = handle:read("*a")
+  handle:close()
+  return (result:gsub("\n+$", ""))
+end
+
+local function exec(command)
+  local result = os.execute(command)
+  if type(result) == "number" then
+    if result == 0 then
+      return true
+    else
+      return nil
+    end
+  else
+    return result
+  end
+end
+
+local function is_regular_file(file)
+  return exec("test -f " .. quote(file))
+end
+
+local function is_directory(file)
+  return exec("test -d " .. quote(file))
+end
+
+local function split_whitespace(s, result)
+  if not result then
+    result = {}
+  end
+  for item in s:gmatch("%S+") do
+    result[#result + 1] = item
+  end
+  return result
+end
+
+local function map_gsub(list, pattern, repl)
+  for i, v in ipairs(list) do
+    list[i] = v:gsub(pattern, repl)
+  end
+  return list
+end
+
+local function check_lua_header()
+  io.stderr:write("checking src/lua.h\n")
+  local version = {}
+  for line in io.lines("src/lua.h") do
+    -- Lua 5.1
+    local major, minor = line:match([[#define%s+LUA_VERSION%s+"Lua%s+(%d+)%.(%d+)"]])
+    if major then
+      version.major = tonumber(major)
+      version.minor = tonumber(minor)
+      version.release = 0
+    end
+
+    -- Lua 5.1.x
+    local major, minor, release = line:match([[#define%s+LUA_RELEASE%s+"Lua%s+(%d+)%.(%d+)%.(%d+)"]])
+    if major then
+      version.major = tonumber(major)
+      version.minor = tonumber(minor)
+      version.release = tonumber(release)
+      break
+    end
+
+    -- Lua 5.2.x and Lua 5.3.x
+    local key, value = line:match([[#define%s+LUA_VERSION_(%u+)%s+"(%d+)"]])
+    if key then
+      version[key:lower()] = tonumber(value)
+      if key == "RELEASE" then
+        break
+      end
+    end
+
+    if line:find("#define%s+LUA_SIGNATURE%s+") then
+      assert(version.major == 5)
+      assert(version.minor == 1)
+      assert(version.release == 0)
+      break
+    end
+  end
+  return version
+end
+
+local function check_makefile(filename, result)
+  io.stderr:write("checking ", filename, "\n")
+  local buffer = ""
+  for line in io.lines(filename) do
+    if line:find("\\$") then
+      buffer = buffer .. line:sub(1, -2)
+    else
+      buffer = buffer .. line
+      local key, value = buffer:match("^([%w_]+)%s*=%s*(.*)")
+      if key then
+        result[key] = value
+      end
+      buffer = ""
+    end
+  end
+  return result
+end
+
+local luaconf_header_templates = {
+-- Lua 5.1
+[[
+#define LUA_USE_POSIX
+#define LUA_USE_DLOPEN
+@LUA_USE_READLINE@
+#define LUA_USE_LONGLONG
+]];
+-- Lua 5.2
+[[
+#define LUA_COMPAT_ALL
+#define LUA_USE_POSIX
+#define LUA_USE_DLOPEN
+@LUA_USE_READLINE@
+#define LUA_USE_STRTODHEX
+#define LUA_USE_AFORMAT
+#define LUA_USE_LONGLONG
+]];
+-- Lua 5.3
+[[
+#define LUA_COMPAT_5_2
+#define LUA_USE_POSIX
+#define LUA_USE_DLOPEN
+@LUA_USE_READLINE@
+]];
+}
+
+local function process_luaconf_header(version)
+  io.stderr:write("generating src/luaconf.h.in\n")
+  local state = 1
+  local out = assert(io.open("src/luaconf.h.in", "w"))
+  for line in io.lines("src/luaconf.h") do
+    if state == 1 then
+      if line:find([[Search for "@@" to find all configurable definitions%.]]) then
+        state = 2
+      end
+    elseif state == 2 then
+      if line == "" then
+        state = 3
+      end
+    elseif state == 3 then
+      if line == "" then
+        assert(version.major == 5)
+        out:write(assert(luaconf_header_templates[version.minor]))
+        state = 4
+      end
+    else
+      line = line:gsub([[(#define%s+LUA_ROOT%s+)"[^"]+/"]], [[%1"@prefix@/"]])
+    end
+    out:write(line, "\n")
+  end
+  out:close()
+end
+
+local function process_template(filename, template, vars)
+  io.stderr:write("generating ", filename, "\n")
+  local out = assert(io.open(filename, "w"))
+  out:write((template:gsub("%[%%%s*(.-)%s*%%%]", vars)))
+  out:close()
+end
+
+local command = ...
+
+if command == "version" then
+  io.write(DROMOZOA_AUTOTOOLIZE_VERSION, "\n")
+  return
+end
+
+local version = check_lua_header()
+local make_vars = {}
+check_makefile("Makefile", make_vars)
+check_makefile("src/Makefile", make_vars)
+
+local vars = {
+  DROMOZOA_AUTOTOOLIZE_VERSION = DROMOZOA_AUTOTOOLIZE_VERSION;
+  DROMOZOA_AUTOTOOLIZE_EMAIL = DROMOZOA_AUTOTOOLIZE_EMAIL;
+  DROMOZOA_AUTOTOOLIZE_URL = DROMOZOA_AUTOTOOLIZE_URL;
+  LUA_V = ("%d.%d"):format(version.major, version.minor);
+  LUA_R = ("%d.%d.%d"):format(version.major, version.minor, version.release);
+}
+
+local files = { "COPYRIGHT", "HISTORY", "MANIFEST", "README", "etc", "test" }
+local extra_dist = {}
+for _, file in ipairs(files) do
+  if is_regular_file(file) or is_directory(file) then
+    extra_dist[#extra_dist + 1] = file
+  end
+end
+vars.EXTRA_DIST = table.concat(extra_dist, " ")
+
+local files = split_whitespace(eval("cd doc && echo [a-z]*"))
+vars["doc/EXTRA_DIST"] = table.concat(files, " ")
+
+local files = split_whitespace(make_vars.TO_MAN)
+vars.man_MANS = table.concat(files, " ")
+
+local files = split_whitespace(eval("cd doc && echo [a-z]*"))
+local html_data = {}
+for _, file in ipairs(files) do
+  if not file:find("%.%d$") then
+    html_data[#html_data + 1] = file
+  end
+end
+vars.html_DATA = table.concat(html_data, " ")
+
+local map = {}
+
+local files = split_whitespace(make_vars.TO_INC)
+local include_headers = {}
+for _, file in ipairs(files) do
+  map[file] = true
+  if file ~= "luaconf.h" then
+    include_headers[#include_headers + 1] = file
+  end
+end
+vars.include_HEADERS = table.concat(include_headers, " ")
+
+local files = split_whitespace(eval("cd src && echo *.h"))
+local noinst_headers = {}
+for _, file in ipairs(files) do
+  if not map[file] then
+    noinst_headers[#noinst_headers + 1] = file
+  end
+end
+vars.noinst_HEADERS = table.concat(noinst_headers, " ")
+
+local files = {}
+split_whitespace(make_vars.CORE_O, files)
+split_whitespace(make_vars.LIB_O, files)
+map_gsub(files, "%.o$", ".c")
+vars.liblua_la_SOURCES = table.concat(files, " ")
+
+local files = split_whitespace(make_vars.LUA_O)
+map_gsub(files, "%.o$", ".c")
+vars.lua_SOURCES = table.concat(files, " ")
+
+local files = split_whitespace(make_vars.LUAC_O)
+map_gsub(files, "%.o$", ".c")
+vars.luac_SOURCES = table.concat(files, " ")
+
+process_luaconf_header(version)
+
+process_template("Makefile.am", [[
+ACLOCAL_AMFLAGS = -I m4
+SUBDIRS = doc src
+EXTRA_DIST = [% EXTRA_DIST %]
+
+install-data-hook:
+	$(MKDIR_P) $(DESTDIR)$(pkgdatadir)/[% LUA_V %]
+	$(MKDIR_P) $(DESTDIR)$(pkglibdir)/[% LUA_V %]
+]], vars)
+
+process_template("doc/Makefile.am", [[
+EXTRA_DIST = [% doc/EXTRA_DIST %]
+man_MANS = [% man_MANS %]
+html_DATA = [% html_DATA %]
+]], vars)
+
+process_template("src/Makefile.am", [[
+lib_LTLIBRARIES = liblua.la
+bin_PROGRAMS = lua luac
+
+include_HEADERS = [% include_HEADERS %]
+nodist_include_HEADERS = luaconf.h
+noinst_HEADERS = [% noinst_HEADERS %]
+
+liblua_la_SOURCES = [% liblua_la_SOURCES %]
+liblua_la_LDFLAGS = -release [% LUA_R %]
+liblua_la_LIBADD = @LIBM@
+
+lua_SOURCES = [% lua_SOURCES %]
+lua_LDFLAGS = -export-dynamic -static
+lua_LDADD = liblua.la
+
+luac_SOURCES = [% luac_SOURCES %]
+luac_LDFLAGS = -export-dynamic -static
+luac_LDADD = liblua.la
+]], vars)
+
+process_template("configure.ac", [=[
+AC_INIT([lua], [[% LUA_R %].dromozoa-autotoolize-[% DROMOZOA_AUTOTOOLIZE_VERSION %]], [[% DROMOZOA_AUTOTOOLIZE_URL %]], [], [[% DROMOZOA_AUTOTOOLIZE_URL %]])
+AM_INIT_AUTOMAKE
+LT_INIT
+
+AC_CONFIG_MACRO_DIR([m4])
+AC_CONFIG_HEADER([src/config.h])
+AC_CONFIG_FILES([src/luaconf.h Makefile doc/Makefile src/Makefile])
+
+AC_PROG_CC
+AC_PROG_MKDIR_P
+AX_LIB_READLINE
+LT_LIB_M
+LT_LIB_DLLOAD
+
+case x$ax_cv_lib_readline in
+  xno) LUA_USE_READLINE='#undef LUA_USE_READLINE';;
+  *) LUA_USE_READLINE='#define LUA_USE_READLINE';;
+esac
+AC_SUBST([LUA_USE_READLINE])
+
+AC_OUTPUT
+]=], vars)
+
+local files = { "AUTHORS", "COPYING", "ChangeLog", "NEWS" }
+for _, file in ipairs(files) do
+  process_template(file, [[
+See doc/readme.html.
+]], vars)
+end
+
+io.stderr:write("fething m4/ax_lib_readline.m4\n")
+assert(exec("mkdir -p m4"))
+assert(exec("curl -fLs 'http://git.savannah.gnu.org/gitweb/?p=autoconf-archive.git;a=blob_plain;f=m4/ax_lib_readline.m4' >m4/ax_lib_readline.m4.new"))
+assert(os.rename("m4/ax_lib_readline.m4.new", "m4/ax_lib_readline.m4"))
