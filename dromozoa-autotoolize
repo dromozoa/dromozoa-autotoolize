@@ -1,6 +1,6 @@
 #! /usr/bin/env lua
 
--- Copyright (C) 2016 Tomoyuki Fujimori <moyu@dromozoa.com>
+-- Copyright (C) 2016,2017 Tomoyuki Fujimori <moyu@dromozoa.com>
 --
 -- This file is part of dromozoa-autotoolize.
 --
@@ -302,7 +302,7 @@ noinst_HEADERS = [% noinst_HEADERS %]
 
 liblua_la_SOURCES = [% liblua_la_SOURCES %]
 liblua_la_LDFLAGS = -release [% LUA_R %]
-liblua_la_LIBADD = @LIBM@
+liblua_la_LIBADD = @LIBM@ @LIBADD_DLOPEN@
 
 lua_SOURCES = [% lua_SOURCES %]
 lua_LDFLAGS = -export-dynamic -static
