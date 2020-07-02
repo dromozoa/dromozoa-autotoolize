@@ -1,6 +1,6 @@
 #! /usr/bin/env lua
 
--- Copyright (C) 2016,2017 Tomoyuki Fujimori <moyu@dromozoa.com>
+-- Copyright (C) 2016,2017,2020 Tomoyuki Fujimori <moyu@dromozoa.com>
 --
 -- This file is part of dromozoa-autotoolize.
 --
@@ -155,6 +155,13 @@ local luaconf_header_templates = {
 -- Lua 5.3
 [[
 #define LUA_COMPAT_5_2
+#define LUA_USE_POSIX
+#define LUA_USE_DLOPEN
+@LUA_USE_READLINE@
+]];
+-- Lua 5.4
+[[
+#define LUA_COMPAT_5_3
 #define LUA_USE_POSIX
 #define LUA_USE_DLOPEN
 @LUA_USE_READLINE@
