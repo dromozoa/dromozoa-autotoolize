@@ -1,6 +1,6 @@
 #! /usr/bin/env lua
 
--- Copyright (C) 2016,2017,2020,2023 Tomoyuki Fujimori <moyu@dromozoa.com>
+-- Copyright (C) 2016,2017,2020,2023,2024 Tomoyuki Fujimori <moyu@dromozoa.com>
 --
 -- This file is part of dromozoa-autotoolize.
 --
@@ -231,7 +231,7 @@ for _, file in ipairs(files) do
 end
 vars.EXTRA_DIST = table.concat(extra_dist, " ")
 
-local files = split_whitespace(eval("cd doc && echo [a-z]*"))
+local files = split_whitespace(eval("cd doc && echo [Oa-z]*"))
 vars["doc/EXTRA_DIST"] = table.concat(files, " ")
 
 local files = split_whitespace(make_vars.TO_MAN)
