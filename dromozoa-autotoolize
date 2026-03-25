@@ -122,6 +122,7 @@ local function check_lua_header()
       break
     end
   end
+  assert(version.major == 5)
   return version
 end
 
@@ -179,6 +180,7 @@ local luaconf_header_templates = {
 [[
 #define LUA_USE_POSIX
 #define LUA_USE_DLOPEN
+@LUA_READLINELIB@
 ]];
 }
 
@@ -197,7 +199,6 @@ local function process_luaconf_header(version)
       end
     elseif state == 3 then
       if line == "" then
-        assert(version.major == 5)
         out:write(assert(luaconf_header_templates[version.minor]))
         state = 4
       end
@@ -334,7 +335,7 @@ luac_LDFLAGS = -export-dynamic -static
 luac_LDADD = liblua.la
 ]], vars)
 
-process_template("configure.ac", [=[
+local template = [=[
 AC_INIT([lua], [[% LUA_R %].dromozoa-autotoolize-[% DROMOZOA_AUTOTOOLIZE_VERSION %]], [[% DROMOZOA_AUTOTOOLIZE_URL %]], [], [[% DROMOZOA_AUTOTOOLIZE_URL %]])
 AM_INIT_AUTOMAKE
 LT_INIT
@@ -356,7 +357,42 @@ esac
 AC_SUBST([LUA_USE_READLINE])
 
 AC_OUTPUT
-]=], vars)
+]=]
+
+local template55 = [=[
+AC_INIT([lua], [[% LUA_R %].dromozoa-autotoolize-[% DROMOZOA_AUTOTOOLIZE_VERSION %]], [[% DROMOZOA_AUTOTOOLIZE_URL %]], [], [[% DROMOZOA_AUTOTOOLIZE_URL %]])
+AM_INIT_AUTOMAKE
+LT_INIT
+
+AC_CONFIG_MACRO_DIR([m4])
+AC_CONFIG_HEADERS([src/config.h])
+AC_CONFIG_FILES([src/luaconf.h Makefile doc/Makefile src/Makefile])
+
+AC_PROG_CC
+AC_PROG_MKDIR_P
+LT_LIB_M
+LT_LIB_DLLOAD
+
+mode=no
+eval "shrext=$shrext_cmds"
+case X$shrext in
+  X.so)
+    LUA_READLINELIB='#define LUA_READLINELIB "libreadline.so"';;
+  X.dylib)
+    LUA_READLINELIB='#define LUA_READLINELIB "libedit.dylib"';;
+  *)
+    LUA_READLINELIB='#undef LUA_READLINELIB';;
+esac
+AC_SUBST([LUA_READLINELIB])
+
+AC_OUTPUT
+]=]
+
+if version.minor <= 4 then
+  process_template("configure.ac", template, vars)
+else
+  process_template("configure.ac", template55, vars)
+end
 
 local files = { "AUTHORS", "COPYING", "ChangeLog", "NEWS" }
 for _, file in ipairs(files) do
@@ -365,7 +401,9 @@ See doc/readme.html.
 ]], vars)
 end
 
-io.stderr:write("fething m4/ax_lib_readline.m4\n")
 assert(exec("mkdir -p m4"))
-assert(exec("curl -fLs 'http://git.savannah.gnu.org/gitweb/?p=autoconf-archive.git;a=blob_plain;f=m4/ax_lib_readline.m4' >m4/ax_lib_readline.m4.new"))
-assert(os.rename("m4/ax_lib_readline.m4.new", "m4/ax_lib_readline.m4"))
+if version.minor <= 4 then
+  io.stderr:write("fething m4/ax_lib_readline.m4\n")
+  assert(exec("curl -fLs 'http://git.savannah.gnu.org/gitweb/?p=autoconf-archive.git;a=blob_plain;f=m4/ax_lib_readline.m4' >m4/ax_lib_readline.m4.new"))
+  assert(os.rename("m4/ax_lib_readline.m4.new", "m4/ax_lib_readline.m4"))
+end
