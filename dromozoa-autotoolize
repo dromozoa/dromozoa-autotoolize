@@ -189,6 +189,7 @@ local function process_luaconf_header(version)
   local state = 1
   local out = assert(io.open("src/luaconf.h.in", "w"))
   for line in io.lines("src/luaconf.h") do
+    local line = line
     if state == 1 then
       if line:find([[Search for "@@" to find all configurable definitions%.]]) then
         state = 2
@@ -404,6 +405,6 @@ end
 assert(exec("mkdir -p m4"))
 if version.minor <= 4 then
   io.stderr:write("fething m4/ax_lib_readline.m4\n")
-  assert(exec("curl -fLs 'http://git.savannah.gnu.org/gitweb/?p=autoconf-archive.git;a=blob_plain;f=m4/ax_lib_readline.m4' >m4/ax_lib_readline.m4.new"))
+  assert(exec("curl -fLs 'https://raw.githubusercontent.com/autoconf-archive/autoconf-archive/refs/heads/master/m4/ax_lib_readline.m4' >m4/ax_lib_readline.m4.new"))
   assert(os.rename("m4/ax_lib_readline.m4.new", "m4/ax_lib_readline.m4"))
 end
